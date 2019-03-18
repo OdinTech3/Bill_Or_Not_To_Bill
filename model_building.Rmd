@@ -51,7 +51,7 @@ y_val <- labels[-train_index]
 
 ```{r}
 model <- keras_model_sequential() %>% 
-  layer_embedding(input_dim = MAX_WORDS, output_dim = 100, input_length = MAX_LEN) %>% 
+  layer_embedding(input_dim = CONSTANTS$MAX_WORDS, output_dim = 100, input_length = MAX_LEN) %>% 
   layer_flatten() %>% 
   layer_dense(units = 32, activation = "relu") %>% 
   layer_dense(units = 1, activation = "sigmoid")

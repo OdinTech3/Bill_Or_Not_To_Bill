@@ -197,10 +197,12 @@ billing_df$`Billing Notes` <- bill_notes_cleaned %>% sapply(function (doc) doc$c
 ## 3. Tokenization
 
 ```{r}
-# We will only consider the top 10,000 words in the dataset
-MAX_WORDS <- 10000
-# We will cut text after 100 words
-MAX_LEN <- 100
+CONSTANTS <- list(
+  # We will only consider the top 10,000 words in the dataset
+  MAX_WORDS = 10000,
+  # We will cut text after 100 words
+  MAX_LEN = 100
+)
 ```
 
 ### 3.1 Tokeninzing Categorical data
@@ -231,7 +233,7 @@ call_text_df <- billing_df %>% select(c("Call Text"))
 A `tokenizer` object will be created and configured to only take into account the 20,000 most common words, then builds the word index.
 
 ```{r}
-tokenizer <- text_tokenizer(num_words = MAX_WORDS) %>% 
+tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>% 
   fit_text_tokenizer(call_text_df$`Call Text`)
 ```
 
@@ -245,16 +247,18 @@ How you can recover the word index that was computed
 
 ```{r}
 word_index <- tokenizer$word_index
+
 cat("Found", length(word_index), "unique tokens.\n")
 ```
 
 ```{r}
-calltext_data <- pad_sequences(sequences, maxlen = MAX_LEN)
+calltext_data <- pad_sequences(sequences, maxlen = CONSTANTS$MAX_LEN)
+
 cat("Shape of data tensor:", dim(call_text_data), "\n")
 ```
 
 
 ```{r}
 save.image(file = "data/data_prep_workspace.RData")
-save(billing_df, call_text_data, file="data/data_preparation.RData")
+save(billing_df, CONSTANTS, call_text_data, file="data/data_preparation.RData")
 ```
