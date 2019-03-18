@@ -1,0 +1,81 @@
+---
+title: "Model Building"
+output: github_document
+---
+
+```{r setup, include=F}
+knitr::opts_chunk$set(
+  fig.path = "markdown_figs/model_building-"
+)
+
+load("data/data_preparation.RData")
+```
+
+```{r, message=FALSE}
+library(keras)
+library(dplyr)
+library(magrittr)
+```
+
+## 1. Spliting Dataset into Training and Test
+
+```{r echo = F}
+# A function to partition the data
+create_data_partition <- function(dataset, train_size = 0.80) {
+  # Creates a value for dividing the data into train and test.
+  smp_size = dataset %>%
+    nrow() %>%
+    multiply_by(train_size) %>%
+    floor()
+  # Randomly identifies the rows equal to sample size from all the rows of dataset dataset
+  # and stores the row number in train_ind
+  return(dataset %>%
+           nrow() %>%
+           sample(x = seq_len(.), size = smp_size)
+  )
+}
+```
+
+
+```{r}
+set.seed(2019)
+train_index <- create_data_partition(call_text_data)
+
+x_train <- call_text_data[train_index,]
+x_val <- call_text_data[-train_index,]
+
+y_train <- labels[train_index]
+y_val <- labels[-train_index]
+```
+
+
+```{r}
+model <- keras_model_sequential() %>% 
+  layer_embedding(input_dim = MAX_WORDS, output_dim = 100, input_length = MAX_LEN) %>% 
+  layer_flatten() %>% 
+  layer_dense(units = 32, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+
+summary(model)
+```
+
+```{r}
+model %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("acc")
+)
+
+history <- model %>% fit(
+  x_train, y_train,
+  epochs = 10,
+  batch_size = 32,
+  validation_data = list(x_val, y_val)
+)
+```
+
+Let's plot the visualize the training and test metrics by epoch:
+
+```{r}
+plot(history)
+```
