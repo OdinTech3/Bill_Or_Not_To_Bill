@@ -225,7 +225,7 @@ We will tokenize each free form text: `Call Text` and `Billing Notes` separatley
 We will start out by tokenizing `Call Text`:
 
 ```{r}
-call_text_df <- billing_df_2 %>% select(c("Call Text"))
+call_text_df <- billing_df %>% select(c("Call Text"))
 ```
 
 A `tokenizer` object will be created and configured to only take into account the 20,000 most common words, then builds the word index.
