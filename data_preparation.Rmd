@@ -255,6 +255,6 @@ cat("Shape of data tensor:", dim(call_text_data), "\n")
 
 
 ```{r}
-#save.image(file = "data/data_prep_workspace.RData")
+save.image(file = "data/data_prep_workspace.RData")
 save(billing_df, call_text_data, file="data/data_preparation.RData")
 ```
