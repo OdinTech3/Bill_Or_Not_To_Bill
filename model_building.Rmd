@@ -46,12 +46,13 @@ x_val <- call_text_data[-train_index,]
 
 y_train <- labels[train_index]
 y_val <- labels[-train_index]
+head(x_train)
 ```
 
 
 ```{r}
 model <- keras_model_sequential() %>% 
-  layer_embedding(input_dim = CONSTANTS$MAX_WORDS, output_dim = 100, input_length = MAX_LEN) %>% 
+  layer_embedding(input_dim = CONSTANTS$MAX_WORDS, output_dim = 100, input_length = CONSTANTS$MAX_LEN) %>% 
   layer_flatten() %>% 
   layer_dense(units = 32, activation = "relu") %>% 
   layer_dense(units = 1, activation = "sigmoid")

@@ -252,7 +252,7 @@ cat("Found", length(word_index), "unique tokens.\n")
 ```
 
 ```{r}
-calltext_data <- pad_sequences(sequences, maxlen = CONSTANTS$MAX_LEN)
+call_text_data <- pad_sequences(sequences, maxlen = CONSTANTS$MAX_LEN)
 
 cat("Shape of data tensor:", dim(call_text_data), "\n")
 ```
