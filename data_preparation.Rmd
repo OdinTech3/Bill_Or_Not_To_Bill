@@ -15,7 +15,6 @@ library(dplyr)
 library(magrittr)
 library(tm)
 library(keras)
-library(SnowballC)
 ```
 
 ## 1. Loading The Data
@@ -40,7 +39,7 @@ Based on initial discussions and research into the meaning of some of the featur
 
 ```{r, echo=FALSE}
 features_to_rm <- c(
-  "SR Address Line 1", 
+  "SR Address Line 1",
   "SR City",
   "SR Status",
   "Activity Status",
@@ -130,14 +129,14 @@ call_text_corpus %>% extract(1:3) %>% inspect()
 call_text_corpus %>% head(3) %>% lapply(function (doc) doc$content)
 ```
 
-To clean our data set we will have to: 
+To clean our data set we will have to:
 
 * Convert the text to lower case, so that words like "write" and "Write" are considered the same word
 * Remove numbers
 * Remove English stopwords e.g "the", "is", "of", etc.
 * Remove punctuation e.g ",", "?", etc.
 * Eliminate extra white spaces
-* Stemming our text 
+* Stemming our text
 
 Using the `tm` package we will apply transformations to each text document in the `call_text_corpus` to clean the text document.
 
@@ -155,7 +154,7 @@ remove_single_chars <- function(document) {
 }
 
 clean_up <- function(corpus) {
-  corpus %>% 
+  corpus %>%
     # Convert the text to lower case
     tm_map(content_transformer(tolower)) %>%
     # Replace asterics "*" with an empty space
@@ -227,18 +226,18 @@ cat('Shape of label tensor:', dim(labels), "\n")
 
 ### 3.2 Tokenizing Free Form Text
 
-We will tokenize each free form text: `Call Text` and `Billing Notes` separatley. 
+We will tokenize each free form text: `Call Text` and `Billing Notes` separatley.
 
 We will start out by tokenizing `Call Text`:
 
 ```{r}
-call_text_df <- billing_df %>% select(c("Call Text"))
+call_text_df <- billing_df %>% select(`Call Text`)
 ```
 
 A `tokenizer` object will be created and configured to only take into account the 20,000 most common words, then builds the word index.
 
 ```{r}
-tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>% 
+tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>%
   fit_text_tokenizer(call_text_df$`Call Text`)
 ```
 
@@ -261,6 +260,7 @@ call_text_data <- pad_sequences(sequences, maxlen = CONSTANTS$MAX_LEN)
 
 cat("Shape of data tensor:", dim(call_text_data), "\n")
 ```
+
 
 
 ```{r}
