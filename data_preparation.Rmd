@@ -15,6 +15,7 @@ library(dplyr)
 library(magrittr)
 library(tm)
 library(keras)
+library(SnowballC)
 ```
 
 ## 1. Loading The Data
@@ -174,25 +175,29 @@ clean_up <- function(corpus) {
     # Eliminate extra white spaces
     tm_map(stripWhitespace) %>%
     # strip trailing and leading whitespace
-    tm_map(content_transformer(trimws))
+    tm_map(content_transformer(trimws)) %>%
+    # Stem words
+    tm_map(stemDocument)
 }
 
 call_text_cleaned <- clean_up(call_text_corpus)
 bill_notes_cleaned <- clean_up(bill_notes_corpus)
 ```
 
+
 ```{r}
-call_text_cleaned %>% head(3) %>% lapply(function (doc) doc$content)
+call_text_cleaned  %>% lapply(function (doc) doc$content) %>% extract(1:5)
 ```
 
 ```{r}
-bill_notes_cleaned %>% head(3) %>% lapply(function (doc) doc$content)
+bill_notes_cleaned %>% lapply(function (doc) doc$content) %>% extract(1:5)
 ```
 
 ```{r}
 billing_df$`Call Text` <- call_text_cleaned %>% sapply(function (doc) doc$content)
 billing_df$`Billing Notes` <- bill_notes_cleaned %>% sapply(function (doc) doc$content)
 ```
+
 
 ## 3. Tokenization
 
