@@ -1,2 +1,7 @@
-/billing_data/
 *.nb.html
+/billing_data/
+
+
+#Rstudio Files
+.RData
+.Rhistory
