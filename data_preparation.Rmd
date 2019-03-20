@@ -15,6 +15,7 @@ library(dplyr)
 library(magrittr)
 library(tm)
 library(keras)
+library(SnowballC)
 ```
 
 ## 1. Loading The Data
@@ -39,7 +40,7 @@ Based on initial discussions and research into the meaning of some of the featur
 
 ```{r, echo=FALSE}
 features_to_rm <- c(
-  "SR Address Line 1",
+  "SR Address Line 1", 
   "SR City",
   "SR Status",
   "Activity Status",
@@ -114,11 +115,13 @@ billing_df$`Billing Notes` %>% extract(c(3, 5, 1))
 ```{r}
 call_text <-  use_series(billing_df, `Call Text`)
 billing_notes <-  use_series(billing_df, `Billing Notes`)
+item_desc <- use_series(billing_df, `Item Desc`)
 ```
 
 ```{r}
 call_text_corpus <- VCorpus(VectorSource(call_text), readerControl = list(language = "en"))
 bill_notes_corpus <- VCorpus(VectorSource(billing_notes), readerControl = list(language = "en"))
+item_desc_corpus <- VCorpus(VectorSource(item_desc), readerControl = list(language = "en"))
 ```
 
 ```{r}
@@ -129,14 +132,14 @@ call_text_corpus %>% extract(1:3) %>% inspect()
 call_text_corpus %>% head(3) %>% lapply(function (doc) doc$content)
 ```
 
-To clean our data set we will have to:
+To clean our data set we will have to: 
 
 * Convert the text to lower case, so that words like "write" and "Write" are considered the same word
 * Remove numbers
 * Remove English stopwords e.g "the", "is", "of", etc.
 * Remove punctuation e.g ",", "?", etc.
 * Eliminate extra white spaces
-* Stemming our text
+* Stemming our text 
 
 Using the `tm` package we will apply transformations to each text document in the `call_text_corpus` to clean the text document.
 
@@ -154,7 +157,7 @@ remove_single_chars <- function(document) {
 }
 
 clean_up <- function(corpus) {
-  corpus %>%
+  corpus %>% 
     # Convert the text to lower case
     tm_map(content_transformer(tolower)) %>%
     # Replace asterics "*" with an empty space
@@ -181,6 +184,7 @@ clean_up <- function(corpus) {
 
 call_text_cleaned <- clean_up(call_text_corpus)
 bill_notes_cleaned <- clean_up(bill_notes_corpus)
+item_desc_cleaned <- clean_up(item_desc_corpus)
 ```
 
 
@@ -195,6 +199,7 @@ bill_notes_cleaned %>% lapply(function (doc) doc$content) %>% extract(1:5)
 ```{r}
 billing_df$`Call Text` <- call_text_cleaned %>% sapply(function (doc) doc$content)
 billing_df$`Billing Notes` <- bill_notes_cleaned %>% sapply(function (doc) doc$content)
+billing_df$`Item Desc` <- item_desc_cleaned %>% sapply (function (doc) doc$content)
 ```
 
 
@@ -226,18 +231,20 @@ cat('Shape of label tensor:', dim(labels), "\n")
 
 ### 3.2 Tokenizing Free Form Text
 
-We will tokenize each free form text: `Call Text` and `Billing Notes` separatley.
+We will tokenize each free form text: `Call Text`, `Billing Notes`, and `Item Description` separately. 
+
+## 3.2.1 Call Text
 
 We will start out by tokenizing `Call Text`:
 
 ```{r}
-call_text_df <- billing_df %>% select(`Call Text`)
+call_text_df <- billing_df %>% select(c("Call Text"))
 ```
 
 A `tokenizer` object will be created and configured to only take into account the 20,000 most common words, then builds the word index.
 
 ```{r}
-tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>%
+tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>% 
   fit_text_tokenizer(call_text_df$`Call Text`)
 ```
 
@@ -261,9 +268,66 @@ call_text_data <- pad_sequences(sequences, maxlen = CONSTANTS$MAX_LEN)
 cat("Shape of data tensor:", dim(call_text_data), "\n")
 ```
 
+## 3.2.2 Billing Notes
 
+We then tokenize `Billing Notes`:
+
+```{r}
+billing_notes_df <- billing_df %>% select("Billing Notes")
+```
+
+```{r}
+tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>% 
+  fit_text_tokenizer(billing_notes_df$`Billing Notes`)
+```
+
+```{r}
+sequences <- texts_to_sequences(tokenizer, billing_notes_df$`Billing Notes`)
+```
+
+```{r}
+word_index <- tokenizer$word_index
+
+cat("Found", length(word_index), "unique tokens.\n")
+```
+
+```{r}
+billing_notes_data <- pad_sequences(sequences, maxlen = CONSTANTS$MAX_LEN)
+
+cat("Shape of data tensor:", dim(billing_notes_data), "\n")
+```
+
+
+## 3.2.3 Item Description
+
+Finally we tokenize `Item Desc`:
+
+```{r}
+item_desc_df <- billing_df %>% select(c("Item Desc"))
+```
+
+```{r}
+tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>% 
+  fit_text_tokenizer(item_desc_df$`Item Desc`)
+```
+
+```{r}
+sequences <- texts_to_sequences(tokenizer, item_desc_df$`Item Desc`)
+```
+
+```{r}
+word_index <- tokenizer$word_index
+
+cat("Found", length(word_index), "unique tokens.\n")
+```
+
+```{r}
+item_desc_data <- pad_sequences(sequences, maxlen = CONSTANTS$MAX_LEN)
+
+cat("Shape of data tensor:", dim(item_desc_data), "\n")
+```
 
 ```{r}
 save.image(file = "data/data_prep_workspace.RData")
-save(billing_df, CONSTANTS, call_text_data, file="data/data_preparation.RData")
+save(billing_df, CONSTANTS, call__data, file="data/data_preparation.RData")
 ```
