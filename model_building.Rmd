@@ -36,6 +36,7 @@ create_data_partition <- function(dataset, train_size = 0.80) {
 }
 ```
 
+### For `Call Text`
 
 ```{r}
 set.seed(2019)
@@ -46,28 +47,27 @@ x_val <- call_text_data[-train_index,]
 
 y_train <- labels[train_index]
 y_val <- labels[-train_index]
-head(x_train)
 ```
 
 
 ```{r}
-model <- keras_model_sequential() %>% 
+call_text_model <- keras_model_sequential() %>% 
   layer_embedding(input_dim = CONSTANTS$MAX_WORDS, output_dim = 100, input_length = CONSTANTS$MAX_LEN) %>% 
   layer_flatten() %>% 
   layer_dense(units = 32, activation = "relu") %>% 
   layer_dense(units = 1, activation = "sigmoid")
 
-summary(model)
+summary(call_text_model)
 ```
 
 ```{r}
-model %>% compile(
+call_text_model %>% compile(
   optimizer = "rmsprop",
   loss = "binary_crossentropy",
   metrics = c("acc")
 )
 
-history <- model %>% fit(
+history <- call_text_model %>% fit(
   x_train, y_train,
   epochs = 10,
   batch_size = 32,
@@ -80,3 +80,110 @@ Let's plot the visualize the training and test metrics by epoch:
 ```{r}
 plot(history)
 ```
+
+```{r}
+classes <- call_text_model %>% predict_classes(x_val)
+
+Confusion.Matrix <- table(Actual = y_val, Predicted = classes)
+colnames(Confusion.Matrix) <- c("No", "Yes")
+rownames(Confusion.Matrix) <- c("No", "Yes")
+
+Confusion.Matrix
+```
+
+### For `Billing Notes`
+
+```{r}
+set.seed(2019)
+train_index <- create_data_partition(billing_notes_data)
+
+x_train <- billing_notes_data[train_index,]
+x_val <- billing_notes_data[-train_index,]
+
+y_train <- labels[train_index]
+y_val <- labels[-train_index]
+head(x_train)
+```
+
+```{r}
+billing_notes_model <- keras_model_sequential() %>% 
+  layer_embedding(input_dim = CONSTANTS$MAX_WORDS, output_dim = 100, input_length = CONSTANTS$MAX_LEN) %>% 
+  layer_flatten() %>% 
+  layer_dense(units = 32, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+
+summary(billing_notes_model)
+```
+
+```{r}
+billing_notes_model %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("acc")
+)
+
+history <- billing_notes_model %>% fit(
+  x_train, y_train,
+  epochs = 10,
+  batch_size = 32,
+  validation_data = list(x_val, y_val)
+)
+```
+
+```{r}
+plot(history)
+```
+
+```{r}
+classes <- billing_notes_model %>% predict_classes(x_val)
+table(y_val,classes)
+```
+
+###For Item Desc
+
+```{r}
+set.seed(2019)
+train_index <- create_data_partition(item_desc_data)
+
+x_train <- item_desc_data[train_index,]
+x_val <- item_desc_data[-train_index,]
+
+y_train <- labels[train_index]
+y_val <- labels[-train_index]
+head(x_train)
+```
+
+```{r}
+item_desc_model <- keras_model_sequential() %>% 
+  layer_embedding(input_dim = CONSTANTS$MAX_WORDS, output_dim = 100, input_length = CONSTANTS$MAX_LEN) %>% 
+  layer_flatten() %>% 
+  layer_dense(units = 32, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+
+summary(item_desc_model)
+```
+
+```{r}
+item_desc_model %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("acc")
+)
+
+history <- item_desc_model %>% fit(
+  x_train, y_train,
+  epochs = 10,
+  batch_size = 32,
+  validation_data = list(x_val, y_val)
+)
+```
+
+```{r}
+plot(history)
+```
+
+```{r}
+classes <- item_desc_model %>% predict_classes(x_val)
+table(y_val,classes)
+```
+
