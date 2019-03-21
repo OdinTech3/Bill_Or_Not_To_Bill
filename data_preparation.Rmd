@@ -24,8 +24,8 @@ We will only load the first 100 observations
 
 ```{r, warning=FALSE, message=FALSE}
 # Encode specific kinds of values as NA while reading excel
-non_bill_df <- read_excel("data/december_non-bill_calls.xlsx", na = c("", "---"), n_max = 100)
-billed_df <- read_excel("data/december_billed_calls.xlsx", na = c("", "---"), n_max = 100)
+non_bill_df <- read_excel("data/december_non-bill_calls.xlsx", na = c("", "---"), n_max = 1000)
+billed_df <- read_excel("data/december_billed_calls.xlsx", na = c("", "---"), n_max = 1000)
 ```
 
 We will combine `non_bill_df` and `billed_df` into a dataframe called `billing_df`.
@@ -45,8 +45,8 @@ features_to_rm <- c(
   "SR Status",
   "Activity Status",
   "Charges Status",
-  "SR Coverage Hours...11",
-  "SR Coverage Hours...28",
+  "SR Coverage Hours..11",
+  "SR Coverage Hours..28",
   "Br Region Desc",
   "Activity Facts Call Num"
 )
@@ -223,9 +223,26 @@ labels <- billing_df %>%
   use_series("Invoiced (Y/N)") %>%
   as.numeric() %>%
   subtract(1) %>%
+  ifelse(("Invoiced (Y/N)" == "Y"),1) %>%
   as.array()
 
 cat('Shape of label tensor:', dim(labels), "\n")
+View(labels)
+
+```
+
+
+```{r}
+type <- billing_df %>%
+  use_series("SR Type") %>%
+  as.numeric() %>%
+  to_categorical() %>%
+  as.array()
+
+cat('Shape of SR Type tensor:', dim(type), "\n")
+```
+```{r}
+View(type)
 ```
 
 
@@ -327,7 +344,17 @@ item_desc_data <- pad_sequences(sequences, maxlen = CONSTANTS$MAX_LEN)
 cat("Shape of data tensor:", dim(item_desc_data), "\n")
 ```
 
+
+```{r}
+
+```
+
+
+
+
+
+
 ```{r}
 save.image(file = "data/data_prep_workspace.RData")
-save(billing_df, CONSTANTS, call__data, file="data/data_preparation.RData")
+save(billing_df, CONSTANTS, call_text_data, billing_notes_data, item_desc_data, file="data/data_preparation.RData")
 ```
