@@ -1,7 +1,9 @@
-*.nb.html
-/billing_data/
+data/december_billed_calls.xlsx
+data/december_non-bill_calls.xlsx
+billing_data/
 
 
-#Rstudio Files
+# Rstudio Files
 .RData
 .Rhistory
+*.nb.html
