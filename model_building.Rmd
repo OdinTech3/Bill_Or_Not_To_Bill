@@ -187,3 +187,81 @@ classes <- item_desc_model %>% predict_classes(x_val)
 table(y_val,classes)
 ```
 
+## 2. Merging the inputs
+
+### 2.1 Creating the input layers
+
+```{r}
+ct_input_layer <- layer_input(
+  shape = c(CONSTANTS$NUM_SAMPLES, CONSTANTS$MAX_LEN),
+  dtype = "int32",
+  name = "Call Text"
+)
+
+bn_input_layer <- layer_input(
+  shape = c(CONSTANTS$NUM_SAMPLES, CONSTANTS$MAX_LEN),
+  dtype = "int32",
+  name = "Billing Notes"
+)
+
+id_input_layer <- layer_input(
+  shape = c(CONSTANTS$NUM_SAMPLES, CONSTANTS$MAX_LEN),
+  dtype = "int32",
+  name = "Item Description"
+)
+```
+
+
+### 2.2 Creating the Embedding layers
+
+```{r}
+ct_aux_out_layer <- ct_input_layer %>% 
+  layer_embedding(
+    input_dim = CONSTANTS$MAX_WORDS,
+    output_dim = 100, 
+    input_length = CONSTANTS$MAX_LEN) %>%
+  layer_dense(units = 32, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid", name = "aux_output_1")
+  
+
+bn_aux_out_layer <- bn_input_layer %>% 
+  layer_embedding(
+    input_dim = CONSTANTS$MAX_WORDS,
+    output_dim = 100, 
+    input_length = CONSTANTS$MAX_LEN) %>%
+  layer_dense(units = 32, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid", name = "aux_output_2")
+
+id_aux_out_layer <- id_input_layer %>% 
+  layer_embedding(
+    input_dim = CONSTANTS$MAX_WORDS,
+    output_dim = 100, 
+    input_length = CONSTANTS$MAX_LEN) %>%
+  layer_dense(units = 32, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid", name = "aux_output_3")
+```
+
+### 2.3 Merging Auxilary and Input Layers
+
+```{r}
+auxiliary_input <- layer_input(shape = c(5), name = 'aux_input')
+
+main_output <- layer_concatenate(c(ct_aux_out_layer, bn_aux_out_layer, id_aux_out_layer, auxiliary_input)) %>%  
+  layer_dense(units = 64, activation = 'relu') %>% 
+  layer_dense(units = 64, activation = 'relu') %>% 
+  layer_dense(units = 64, activation = 'relu') %>% 
+  layer_dense(units = 1, activation = 'sigmoid', name = 'main_output')
+```
+
+```{r}
+model <- keras_model(
+  inputs = c(ct_input_layer, bn_input_layer, id_input_layer, auxiliary_input), 
+  outputs = c(main_output, ct_aux_out_layer, bn_aux_out_layer, id_aux_out_layer)
+)
+```
+
+
+```{r}
+summary(model)
+```
+
