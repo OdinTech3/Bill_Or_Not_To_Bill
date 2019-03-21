@@ -241,6 +241,7 @@ type <- billing_df %>%
 
 cat('Shape of SR Type tensor:', dim(type), "\n")
 ```
+
 ```{r}
 View(type)
 ```
@@ -346,15 +347,6 @@ cat("Shape of data tensor:", dim(item_desc_data), "\n")
 
 
 ```{r}
-
-```
-
-
-
-
-
-
-```{r}
 save.image(file = "data/data_prep_workspace.RData")
-save(billing_df, CONSTANTS, call_text_data, billing_notes_data, item_desc_data, file="data/data_preparation.RData")
+save(billing_df, CONSTANTS, call_text_data, billing_notes_data, item_desc_data, type, file="data/data_preparation.RData")
 ```
