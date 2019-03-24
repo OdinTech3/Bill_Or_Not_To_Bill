@@ -40,13 +40,13 @@ create_data_partition <- function(dataset, train_size = 0.80) {
 
 ```{r}
 set.seed(2019)
-train_index <- create_data_partition(call_text_data)
+train_index_ct <- create_data_partition(call_text_data)
 
-x_train <- call_text_data[train_index,]
-x_val <- call_text_data[-train_index,]
+x_train_ct <- call_text_data[train_index_ct,]
+x_val_ct <- call_text_data[-train_index_ct,]
 
-y_train <- labels[train_index]
-y_val <- labels[-train_index]
+y_train_ct <- labels[train_index_ct]
+y_val_ct <- labels[-train_index_ct]
 ```
 
 
@@ -95,14 +95,13 @@ Confusion.Matrix
 
 ```{r}
 set.seed(2019)
-train_index <- create_data_partition(billing_notes_data)
+train_index_bn <- create_data_partition(billing_notes_data)
 
-x_train <- billing_notes_data[train_index,]
-x_val <- billing_notes_data[-train_index,]
+x_train_bn <- billing_notes_data[train_index_bn,]
+x_val_bn <- billing_notes_data[-train_index_bn,]
 
-y_train <- labels[train_index]
-y_val <- labels[-train_index]
-head(x_train)
+y_train_bn <- labels[train_index_bn]
+y_val_bn <- labels[-train_index_bn]
 ```
 
 ```{r}
@@ -143,14 +142,13 @@ table(y_val,classes)
 
 ```{r}
 set.seed(2019)
-train_index <- create_data_partition(item_desc_data)
+train_index_item <- create_data_partition(item_desc_data)
 
-x_train <- item_desc_data[train_index,]
-x_val <- item_desc_data[-train_index,]
+x_train_item <- item_desc_data[train_index_item,]
+x_val_item <- item_desc_data[-train_index_item,]
 
-y_train <- labels[train_index]
-y_val <- labels[-train_index]
-head(x_train)
+y_train_item <- labels[train_index_item]
+y_val_item <- labels[-train_index_item]
 ```
 
 ```{r}
@@ -187,27 +185,41 @@ classes <- item_desc_model %>% predict_classes(x_val)
 table(y_val,classes)
 ```
 
+### SR Type
+
+```{r}
+set.seed(2019)
+train_index_type <- create_data_partition(type)
+
+x_train_type <- item_desc_data[train_index_type,]
+x_val_type <- item_desc_data[-train_index_type,]
+
+y_train_type <- labels[train_index_type]
+y_val_type <- labels[-train_index_type]
+```
+
+
 ## 2. Merging the inputs
 
 ### 2.1 Creating the input layers
 
 ```{r}
 ct_input_layer <- layer_input(
-  shape = c(CONSTANTS$NUM_SAMPLES, CONSTANTS$MAX_LEN),
+  shape = c(CONSTANTS$MAX_LEN),
   dtype = "int32",
-  name = "Call Text"
+  name = "input_layer_1"
 )
 
 bn_input_layer <- layer_input(
-  shape = c(CONSTANTS$NUM_SAMPLES, CONSTANTS$MAX_LEN),
+  shape = c(CONSTANTS$MAX_LEN),
   dtype = "int32",
-  name = "Billing Notes"
+  name = "input_layer_2"
 )
 
 id_input_layer <- layer_input(
-  shape = c(CONSTANTS$NUM_SAMPLES, CONSTANTS$MAX_LEN),
+  shape = c(CONSTANTS$MAX_LEN),
   dtype = "int32",
-  name = "Item Description"
+  name = "input_layer_3"
 )
 ```
 
@@ -218,26 +230,26 @@ id_input_layer <- layer_input(
 ct_aux_out_layer <- ct_input_layer %>% 
   layer_embedding(
     input_dim = CONSTANTS$MAX_WORDS,
-    output_dim = 100, 
+    output_dim = 512, 
     input_length = CONSTANTS$MAX_LEN) %>%
-  layer_dense(units = 32, activation = "relu") %>% 
+  layer_lstm(units = 32) %>%
   layer_dense(units = 1, activation = "sigmoid", name = "aux_output_1")
   
 
 bn_aux_out_layer <- bn_input_layer %>% 
   layer_embedding(
     input_dim = CONSTANTS$MAX_WORDS,
-    output_dim = 100, 
+    output_dim = 512, 
     input_length = CONSTANTS$MAX_LEN) %>%
-  layer_dense(units = 32, activation = "relu") %>% 
+  layer_lstm(units = 32) %>% 
   layer_dense(units = 1, activation = "sigmoid", name = "aux_output_2")
 
 id_aux_out_layer <- id_input_layer %>% 
   layer_embedding(
     input_dim = CONSTANTS$MAX_WORDS,
-    output_dim = 100, 
+    output_dim = 512, 
     input_length = CONSTANTS$MAX_LEN) %>%
-  layer_dense(units = 32, activation = "relu") %>% 
+  layer_lstm(units = 32) %>%
   layer_dense(units = 1, activation = "sigmoid", name = "aux_output_3")
 ```
 
@@ -265,3 +277,23 @@ model <- keras_model(
 summary(model)
 ```
 
+```{r}
+model %>% compile(
+  optimizer = 'rmsprop',
+  loss = 'binary_crossentropy',
+  loss_weights = c(0.2, 1.0, 0.2, 0.2)
+)
+```
+
+```{r}
+history <- model %>% fit(
+  x = list(billing_notes_data, call_text_data, item_desc_data, type),
+  y = list(labels, labels, labels, labels),
+  epochs = 10,
+  batch_size = 20
+)
+```
+
+```{r}
+plot(history)
+```
