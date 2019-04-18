@@ -15,282 +15,140 @@ load("data/data_preparation.RData")
 library(keras)
 library(dplyr)
 library(magrittr)
+library(caret)
 ```
 
-## 1. Spliting Dataset into Training and Test
+## 1. Spliting Dataset into Training and Validation
 
 ```{r echo = F}
-# A function to partition the data
-create_data_partition <- function(dataset, train_size = 0.80) {
-  # Creates a value for dividing the data into train and test.
-  smp_size = dataset %>%
-    nrow() %>%
-    multiply_by(train_size) %>%
-    floor()
-  # Randomly identifies the rows equal to sample size from all the rows of dataset dataset
-  # and stores the row number in train_ind
-  return(dataset %>%
-           nrow() %>%
-           sample(x = seq_len(.), size = smp_size)
-  )
-}
-```
-
-### For `Call Text`
-
-```{r}
 set.seed(2019)
-train_index_ct <- create_data_partition(call_text_data)
 
-x_train_ct <- call_text_data[train_index_ct,]
-x_val_ct <- call_text_data[-train_index_ct,]
-
-y_train_ct <- labels[train_index_ct]
-y_val_ct <- labels[-train_index_ct]
-```
-
-
-```{r}
-call_text_model <- keras_model_sequential() %>% 
-  layer_embedding(input_dim = CONSTANTS$MAX_WORDS, output_dim = 100, input_length = CONSTANTS$MAX_LEN) %>% 
-  layer_flatten() %>% 
-  layer_dense(units = 32, activation = "relu") %>% 
-  layer_dense(units = 1, activation = "sigmoid")
-
-summary(call_text_model)
-```
-
-```{r}
-call_text_model %>% compile(
-  optimizer = "rmsprop",
-  loss = "binary_crossentropy",
-  metrics = c("acc")
-)
-
-history <- call_text_model %>% fit(
-  x_train, y_train,
-  epochs = 10,
-  batch_size = 32,
-  validation_data = list(x_val, y_val)
+train_index <- createDataPartition(
+  invoiced,
+  p = 0.8,
+  list = F,
+  times = 1
 )
 ```
 
-Let's plot the visualize the training and test metrics by epoch:
+### 1.1 Splitting `Call Text` into Training and Validation
 
 ```{r}
-plot(history)
+call_text_train <- call_text_data[train_index,]
+call_text_val <- call_text_data[-train_index,]
+
+cat(" Shape of Call Text Train:", dim(call_text_train), "\n",
+    "Shape of Call Text Val:", dim(call_text_val))
 ```
 
+### 1.2 Splitting `Billing Notes` into Training and Validation
+
 ```{r}
-classes <- call_text_model %>% predict_classes(x_val)
+billing_notes_train <- billing_notes_data[train_index,]
+billing_notes_val <- billing_notes_data[-train_index,]
 
-Confusion.Matrix <- table(Actual = y_val, Predicted = classes)
-colnames(Confusion.Matrix) <- c("No", "Yes")
-rownames(Confusion.Matrix) <- c("No", "Yes")
-
-Confusion.Matrix
+cat(" Shape of Call Text Train:", dim(billing_notes_train), "\n",
+    "Shape of Call Text Val:", dim(billing_notes_val))
 ```
 
-### For `Billing Notes`
+### 1.3 Splitting `Auxilary` Data into Training and Validation
 
 ```{r}
-set.seed(2019)
-train_index_bn <- create_data_partition(billing_notes_data)
+auxillaries_train <- auxillaries[train_index,]
+auxillaries_val <- auxillaries[-train_index,]
 
-x_train_bn <- billing_notes_data[train_index_bn,]
-x_val_bn <- billing_notes_data[-train_index_bn,]
-
-y_train_bn <- labels[train_index_bn]
-y_val_bn <- labels[-train_index_bn]
+cat(" Shape of Call Text Train:", dim(auxillaries_train), "\n",
+    "Shape of Call Text Val:", dim(auxillaries_val))
 ```
 
-```{r}
-billing_notes_model <- keras_model_sequential() %>% 
-  layer_embedding(input_dim = CONSTANTS$MAX_WORDS, output_dim = 100, input_length = CONSTANTS$MAX_LEN) %>% 
-  layer_flatten() %>% 
-  layer_dense(units = 32, activation = "relu") %>% 
-  layer_dense(units = 1, activation = "sigmoid")
+### 1.4 Splitting `Invoiced` into Training and Validation
 
-summary(billing_notes_model)
+```{r}
+invoiced_train <- invoiced[train_index,]
+invoiced_val <- invoiced[-train_index,]
+
+cat(" Shape of Call Text Train:", dim(invoiced_train), "\n",
+    "Shape of Call Text Val:", dim(invoiced_val))
 ```
 
-```{r}
-billing_notes_model %>% compile(
-  optimizer = "rmsprop",
-  loss = "binary_crossentropy",
-  metrics = c("acc")
-)
+## 2. Merging Multiple Inputs
 
-history <- billing_notes_model %>% fit(
-  x_train, y_train,
-  epochs = 10,
-  batch_size = 32,
-  validation_data = list(x_val, y_val)
-)
-```
+### 2.1 Creating The Input Layers
 
 ```{r}
-plot(history)
-```
-
-```{r}
-classes <- billing_notes_model %>% predict_classes(x_val)
-table(y_val,classes)
-```
-
-###For Item Desc
-
-```{r}
-set.seed(2019)
-train_index_item <- create_data_partition(item_desc_data)
-
-x_train_item <- item_desc_data[train_index_item,]
-x_val_item <- item_desc_data[-train_index_item,]
-
-y_train_item <- labels[train_index_item]
-y_val_item <- labels[-train_index_item]
-```
-
-```{r}
-item_desc_model <- keras_model_sequential() %>% 
-  layer_embedding(input_dim = CONSTANTS$MAX_WORDS, output_dim = 100, input_length = CONSTANTS$MAX_LEN) %>% 
-  layer_flatten() %>% 
-  layer_dense(units = 32, activation = "relu") %>% 
-  layer_dense(units = 1, activation = "sigmoid")
-
-summary(item_desc_model)
-```
-
-```{r}
-item_desc_model %>% compile(
-  optimizer = "rmsprop",
-  loss = "binary_crossentropy",
-  metrics = c("acc")
-)
-
-history <- item_desc_model %>% fit(
-  x_train, y_train,
-  epochs = 10,
-  batch_size = 32,
-  validation_data = list(x_val, y_val)
-)
-```
-
-```{r}
-plot(history)
-```
-
-```{r}
-classes <- item_desc_model %>% predict_classes(x_val)
-table(y_val,classes)
-```
-
-### SR Type
-
-```{r}
-set.seed(2019)
-train_index_type <- create_data_partition(type)
-
-x_train_type <- item_desc_data[train_index_type,]
-x_val_type <- item_desc_data[-train_index_type,]
-
-y_train_type <- labels[train_index_type]
-y_val_type <- labels[-train_index_type]
-```
-
-
-## 2. Merging the inputs
-
-### 2.1 Creating the input layers
-
-```{r}
-ct_input_layer <- layer_input(
+call_text_layer <- layer_input(
   shape = c(CONSTANTS$MAX_LEN),
-  dtype = "int32",
-  name = "input_layer_1"
+  name = "call_text_layer"
 )
 
-bn_input_layer <- layer_input(
+billing_notes_layer <- layer_input(
   shape = c(CONSTANTS$MAX_LEN),
-  dtype = "int32",
-  name = "input_layer_2"
+  name = "billing_notes_layer"
 )
 
-id_input_layer <- layer_input(
-  shape = c(CONSTANTS$MAX_LEN),
-  dtype = "int32",
-  name = "input_layer_3"
-)
+auxiliary_layer <- layer_input(shape = c(dim(auxillaries)[2]), name = 'auxiliary_layer')
 ```
 
-
-### 2.2 Creating the Embedding layers
+### 2.2 Creating The Embedding layers
 
 ```{r}
-ct_aux_out_layer <- ct_input_layer %>% 
+call_text_embedding <- call_text_layer %>%
   layer_embedding(
     input_dim = CONSTANTS$MAX_WORDS,
-    output_dim = 512, 
-    input_length = CONSTANTS$MAX_LEN) %>%
-  layer_lstm(units = 32) %>%
-  layer_dense(units = 1, activation = "sigmoid", name = "aux_output_1")
-  
+    output_dim = 512,
+    input_length = CONSTANTS$MAX_LEN,
+    name = "call_text_embedding") %>%
+  layer_flatten()
 
-bn_aux_out_layer <- bn_input_layer %>% 
+
+billing_notes_embedding <- billing_notes_layer %>%
   layer_embedding(
     input_dim = CONSTANTS$MAX_WORDS,
-    output_dim = 512, 
-    input_length = CONSTANTS$MAX_LEN) %>%
-  layer_lstm(units = 32) %>% 
-  layer_dense(units = 1, activation = "sigmoid", name = "aux_output_2")
-
-id_aux_out_layer <- id_input_layer %>% 
-  layer_embedding(
-    input_dim = CONSTANTS$MAX_WORDS,
-    output_dim = 512, 
-    input_length = CONSTANTS$MAX_LEN) %>%
-  layer_lstm(units = 32) %>%
-  layer_dense(units = 1, activation = "sigmoid", name = "aux_output_3")
+    output_dim = 512,
+    input_length = CONSTANTS$MAX_LEN,
+    name = "billing_notes_embedding") %>%
+  layer_flatten()
 ```
 
-### 2.3 Merging Auxilary and Input Layers
+### 2.3 Merging Input and Auxilary Layers
 
 ```{r}
-auxiliary_input <- layer_input(shape = c(5), name = 'aux_input')
-
-main_output <- layer_concatenate(c(ct_aux_out_layer, bn_aux_out_layer, id_aux_out_layer, auxiliary_input)) %>%  
-  layer_dense(units = 64, activation = 'relu') %>% 
-  layer_dense(units = 64, activation = 'relu') %>% 
-  layer_dense(units = 64, activation = 'relu') %>% 
+main_output <- layer_concatenate(c(call_text_embedding, billing_notes_embedding, auxiliary_layer)) %>%
+  layer_dense(units = 64, activation = 'relu') %>%
+  layer_dense(units = 64, activation = 'relu') %>%
+  layer_dense(units = 64, activation = 'relu') %>%
   layer_dense(units = 1, activation = 'sigmoid', name = 'main_output')
 ```
 
+### 2.4 Building the Model
+
 ```{r}
 model <- keras_model(
-  inputs = c(ct_input_layer, bn_input_layer, id_input_layer, auxiliary_input), 
-  outputs = c(main_output, ct_aux_out_layer, bn_aux_out_layer, id_aux_out_layer)
+  inputs = c(call_text_layer, billing_notes_layer, auxiliary_layer),
+  outputs = main_output
 )
-```
-
-
-```{r}
-summary(model)
 ```
 
 ```{r}
 model %>% compile(
   optimizer = 'rmsprop',
-  loss = 'binary_crossentropy',
-  loss_weights = c(0.2, 1.0, 0.2, 0.2)
+  loss = 'binary_crossentropy'
 )
+
+summary(model)
+```
+
+```{r}
+plot_model(model, show_shapes = T)
 ```
 
 ```{r}
 history <- model %>% fit(
-  x = list(billing_notes_data, call_text_data, item_desc_data, type),
-  y = list(labels, labels, labels, labels),
+  x = list(call_text_train, billing_notes_train, auxillaries_train),
+  y = invoiced_train,
   epochs = 10,
-  batch_size = 20
+  batch_size = 20,
+  validation_data = list(list(call_text_val, billing_notes_val, auxillaries_val), invoiced_val)
 )
 ```
 
