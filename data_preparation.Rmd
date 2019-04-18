@@ -9,12 +9,14 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r, message=FALSE}
+```{r library, warning=F, message=F}
 library(readxl)
+library(reshape2)
 library(dplyr)
 library(magrittr)
 library(tm)
 library(keras)
+library(caret)
 library(SnowballC)
 ```
 
@@ -22,8 +24,9 @@ library(SnowballC)
 
 We will only load the first 100 observations
 
-```{r, warning=FALSE, message=FALSE}
+```{r load-dataset, warning=F, message=F}
 # Encode specific kinds of values as NA while reading excel
+
 non_bill_df <- read_excel("data/december_non-bill_calls.xlsx", na = c("", "---"), n_max = 1000)
 billed_df <- read_excel("data/december_billed_calls.xlsx", na = c("", "---"), n_max = 1000)
 ```
@@ -33,22 +36,27 @@ We will combine `non_bill_df` and `billed_df` into a dataframe called `billing_d
 ```{r}
 billing_df <- bind_rows(non_bill_df, billed_df)
 
-str(billing_df, nchar.max = 20, vec.len = 3)
+glimpse(billing_df)
 ```
 
 Based on initial discussions and research into the meaning of some of the features in this dataset, we have categorized the following features as being not __important__.
 
 ```{r, echo=FALSE}
 features_to_rm <- c(
-  "SR Address Line 1", 
+  "SR Address Line 1",
+  "SR State",
   "SR City",
   "SR Status",
   "Activity Status",
   "Charges Status",
-  "SR Coverage Hours..11",
-  "SR Coverage Hours..28",
+  "Br Area Desc",
+  "SR Coverage Hours...11",
+  "SR Coverage Hours...28",
   "Br Region Desc",
-  "Activity Facts Call Num"
+  "Activity Facts Call Num",
+  "Activity Completed Date",
+  "Item Desc",
+  "SR Contact Date"
 )
 
 features_to_rm
@@ -61,7 +69,7 @@ The features have been stored in variable called `features_to_rm`, the next step
 ```{r}
 billing_df <- billing_df %>% select(-features_to_rm)
 
-str(billing_df, nchar.max = 20, vec.len = 3)
+glimpse(billing_df)
 ```
 
 ## 2. Cleaning The Data
@@ -93,10 +101,10 @@ Lets encode the features in `char_to_factors` as factors
 ```{r}
 billing_df <- billing_df %>% mutate_at(char_to_factors, factor)
 
-billing_df %>% summary()
+glimpse(billing_df)
 ```
 
-### 2.2 Free Form Text
+### 2.2 Preprocessing Free Form Text
 
 The features in our dataset that are free form text are the features `Billing Notes` and `Call Text`.
 
@@ -115,13 +123,11 @@ billing_df$`Billing Notes` %>% extract(c(3, 5, 1))
 ```{r}
 call_text <-  use_series(billing_df, `Call Text`)
 billing_notes <-  use_series(billing_df, `Billing Notes`)
-item_desc <- use_series(billing_df, `Item Desc`)
 ```
 
 ```{r}
 call_text_corpus <- VCorpus(VectorSource(call_text), readerControl = list(language = "en"))
 bill_notes_corpus <- VCorpus(VectorSource(billing_notes), readerControl = list(language = "en"))
-item_desc_corpus <- VCorpus(VectorSource(item_desc), readerControl = list(language = "en"))
 ```
 
 ```{r}
@@ -132,14 +138,14 @@ call_text_corpus %>% extract(1:3) %>% inspect()
 call_text_corpus %>% head(3) %>% lapply(function (doc) doc$content)
 ```
 
-To clean our data set we will have to: 
+To clean our data set we will have to:
 
 * Convert the text to lower case, so that words like "write" and "Write" are considered the same word
 * Remove numbers
 * Remove English stopwords e.g "the", "is", "of", etc.
 * Remove punctuation e.g ",", "?", etc.
 * Eliminate extra white spaces
-* Stemming our text 
+* Stemming our text
 
 Using the `tm` package we will apply transformations to each text document in the `call_text_corpus` to clean the text document.
 
@@ -157,7 +163,7 @@ remove_single_chars <- function(document) {
 }
 
 clean_up <- function(corpus) {
-  corpus %>% 
+  corpus %>%
     # Convert the text to lower case
     tm_map(content_transformer(tolower)) %>%
     # Replace asterics "*" with an empty space
@@ -184,7 +190,6 @@ clean_up <- function(corpus) {
 
 call_text_cleaned <- clean_up(call_text_corpus)
 bill_notes_cleaned <- clean_up(bill_notes_corpus)
-item_desc_cleaned <- clean_up(item_desc_corpus)
 ```
 
 
@@ -199,13 +204,11 @@ bill_notes_cleaned %>% lapply(function (doc) doc$content) %>% extract(1:5)
 ```{r}
 billing_df$`Call Text` <- call_text_cleaned %>% sapply(function (doc) doc$content)
 billing_df$`Billing Notes` <- bill_notes_cleaned %>% sapply(function (doc) doc$content)
-billing_df$`Item Desc` <- item_desc_cleaned %>% sapply (function (doc) doc$content)
 ```
-
 
 ## 3. Tokenization
 
-```{r}
+```{r constants}
 CONSTANTS <- list(
   # We will only consider the top 10,000 words in the dataset
   MAX_WORDS = 10000,
@@ -219,37 +222,47 @@ CONSTANTS <- list(
 We will start off by encoding the labels of `Invoiced (Y/N)` using the `to_categorical` from keras
 
 ```{r}
-labels <- billing_df %>%
+invoiced <- billing_df %>%
   use_series("Invoiced (Y/N)") %>%
   as.numeric() %>%
   subtract(1) %>%
-  ifelse(("Invoiced (Y/N)" == "Y"),1) %>%
-  as.array()
+  as.matrix()
 
-cat('Shape of label tensor:', dim(labels), "\n")
-View(labels)
-
+cat('Shape of label tensor:', dim(invoiced))
 ```
 
+### 3.1.1 One Hot Encoding The Categorical Variables
 
 ```{r}
-type <- billing_df %>%
-  use_series("SR Type") %>%
-  as.numeric() %>%
-  to_categorical() %>%
-  as.array()
+na_to_zero <- function(arr) {
+  arr[is.na(arr)] <- 0
+  arr[is.nan(arr)] <- 0
 
-cat('Shape of SR Type tensor:', dim(type), "\n")
+  arr
+}
 ```
 
-```{r}
-View(type)
-```
+```{r one-hot-encoding}
+auxillaries <- c()
 
+for(category in char_to_factors[-1]) {
+    category_arr <- billing_df[[category]]
+    num_levels <- length(levels(category_arr))
+    auxillaries <- cbind(
+      auxillaries,
+      to_categorical(
+        na_to_zero(as.numeric(category_arr) - 1),
+        num_levels
+      )
+    )
+}
+
+cat('Shape of auxillary tensor:', dim(auxillaries), "\n")
+```
 
 ### 3.2 Tokenizing Free Form Text
 
-We will tokenize each free form text: `Call Text`, `Billing Notes`, and `Item Description` separately. 
+We will tokenize each free form text: `Call Text` and `Billing Notes` separately.
 
 ## 3.2.1 Call Text
 
@@ -262,7 +275,7 @@ call_text_df <- billing_df %>% select(c("Call Text"))
 A `tokenizer` object will be created and configured to only take into account the 20,000 most common words, then builds the word index.
 
 ```{r}
-tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>% 
+tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>%
   fit_text_tokenizer(call_text_df$`Call Text`)
 ```
 
@@ -295,7 +308,7 @@ billing_notes_df <- billing_df %>% select("Billing Notes")
 ```
 
 ```{r}
-tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>% 
+tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>%
   fit_text_tokenizer(billing_notes_df$`Billing Notes`)
 ```
 
@@ -315,38 +328,15 @@ billing_notes_data <- pad_sequences(sequences, maxlen = CONSTANTS$MAX_LEN)
 cat("Shape of data tensor:", dim(billing_notes_data), "\n")
 ```
 
-
-## 3.2.3 Item Description
-
-Finally we tokenize `Item Desc`:
-
-```{r}
-item_desc_df <- billing_df %>% select(c("Item Desc"))
-```
-
-```{r}
-tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>% 
-  fit_text_tokenizer(item_desc_df$`Item Desc`)
-```
-
-```{r}
-sequences <- texts_to_sequences(tokenizer, item_desc_df$`Item Desc`)
-```
-
-```{r}
-word_index <- tokenizer$word_index
-
-cat("Found", length(word_index), "unique tokens.\n")
-```
-
-```{r}
-item_desc_data <- pad_sequences(sequences, maxlen = CONSTANTS$MAX_LEN)
-
-cat("Shape of data tensor:", dim(item_desc_data), "\n")
-```
-
-
 ```{r}
 save.image(file = "data/data_prep_workspace.RData")
-save(billing_df, CONSTANTS, call_text_data, billing_notes_data, item_desc_data, type, file="data/data_preparation.RData")
+save(
+  CONSTANTS,
+  billing_df,
+  call_text_data,
+  billing_notes_data,
+  invoiced,
+  auxillaries,
+  file="data/data_preparation.RData"
+)
 ```
