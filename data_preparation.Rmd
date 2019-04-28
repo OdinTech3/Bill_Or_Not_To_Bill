@@ -1,13 +1,7 @@
 ---
 title: "Data Preparation & Cleaning"
-output: github_document
+output: html_notebook
 ---
-
-```{r setup, include=F}
-knitr::opts_chunk$set(
-  fig.path = "markdown_figs/data_preparation-"
-)
-```
 
 ```{r library, warning=F, message=F}
 library(readxl)
@@ -26,9 +20,10 @@ We will only load the first 100 observations
 
 ```{r load-dataset, warning=F, message=F}
 # Encode specific kinds of values as NA while reading excel
+# Treat all columns as character
 
-non_bill_df <- read_excel("data/december_non-bill_calls.xlsx", na = c("", "---"), n_max = 1000)
-billed_df <- read_excel("data/december_billed_calls.xlsx", na = c("", "---"), n_max = 1000)
+non_bill_df <- read_excel("data/december_non-bill_calls.xlsx", na = c("", "---"), col_types = "text")
+billed_df <- read_excel("data/december_billed_calls.xlsx", na = c("", "---"), col_types = "text")
 ```
 
 We will combine `non_bill_df` and `billed_df` into a dataframe called `billing_df`.
@@ -43,20 +38,23 @@ Based on initial discussions and research into the meaning of some of the featur
 
 ```{r, echo=FALSE}
 features_to_rm <- c(
+  "SR Number",
   "SR Address Line 1",
   "SR State",
   "SR City",
+  "SR Site",
   "SR Status",
+  "SR Contact Date",
+  "SR Coverage Hours...11",
+  "SR Coverage Hours...28",
   "Activity Status",
   "Charges Status",
   "Br Area Desc",
-  "SR Coverage Hours...11",
-  "SR Coverage Hours...28",
-  "Br Region Desc",
+  "Base Call YN",
   "Activity Facts Call Num",
   "Activity Completed Date",
   "Item Desc",
-  "SR Contact Date"
+  "SR Serial Number"
 )
 
 features_to_rm
@@ -64,7 +62,7 @@ features_to_rm
 
 > The features `SR Coverage Hours...11` and `SR Coverage Hours...28` were created by R because the excel contained two columns with the name `SR Coverage Hours`.
 
-The features have been stored in variable called `features_to_rm`, the next step is to remove these `r length(features_to_rm)` features from the `billing_df` dataset. This step reduces our number of features from __29 to 20__.
+The features have been stored in variable called `features_to_rm`, the next step is to remove these `r length(features_to_rm)` features from the `billing_df` dataset. This step reduces our number of features from __29 to 12__.
 
 ```{r}
 billing_df <- billing_df %>% select(-features_to_rm)
@@ -74,7 +72,7 @@ glimpse(billing_df)
 
 ## 2. Cleaning The Data
 
-### 2.1 Encoding The Variables
+### 2.1 Encoding The Variables as Factors
 
 We can notice that R has miss categorized some of the features in our dataset. There are certain features that are supposed to be read as categorical such as:
 
@@ -84,12 +82,11 @@ char_to_factors <- c(
   "Activity Type",
   "Activity Trouble Code",
   "Coverage Type",
-  "Base Call YN",
   "SR Type",
   "SR Device",
-  "SR Site",
   "SR Owner (Q#)",
-  "SR Serial Number",
+  "Br Branch Desc",
+  "Br Region Desc",
   "Cash Vendor & Consumable Contracts"
 )
 
@@ -206,18 +203,20 @@ billing_df$`Call Text` <- call_text_cleaned %>% sapply(function (doc) doc$conten
 billing_df$`Billing Notes` <- bill_notes_cleaned %>% sapply(function (doc) doc$content)
 ```
 
-## 3. Tokenization
+## 3. Tokenization & Encoding
 
 ```{r constants}
 CONSTANTS <- list(
-  # We will only consider the top 10,000 words in the dataset
-  MAX_WORDS = 10000,
-  # We will cut text after 100 words
-  MAX_LEN = 100
+  # We will only consider the top MAX_WORDS in the dataset
+  MAX_WORDS = 20000,
+  # We will cut text after MAX_LEN
+  MAX_LEN = 200,
+  BATCH_SIZE_GPU = 256,
+  BATCH_SIZE_CPU = 128
 )
 ```
 
-### 3.1 Tokeninzing Categorical data
+### 3.1 Encoding Categorical data
 
 We will start off by encoding the labels of `Invoiced (Y/N)` using the `to_categorical` from keras
 
@@ -231,31 +230,20 @@ invoiced <- billing_df %>%
 cat('Shape of label tensor:', dim(invoiced))
 ```
 
-### 3.1.1 One Hot Encoding The Categorical Variables
+#### 3.1.1 One Hot Encoding The Categorical Variables
 
 ```{r}
-na_to_zero <- function(arr) {
-  arr[is.na(arr)] <- 0
-  arr[is.nan(arr)] <- 0
+categorical_vars <- billing_df %>%
+  select(char_to_factors[-1]) %>%
+  # Treat NAs as a factor
+  mutate_all(addNA)
 
-  arr
-}
+glimpse(categorical_vars)
 ```
 
 ```{r one-hot-encoding}
-auxillaries <- c()
-
-for(category in char_to_factors[-1]) {
-    category_arr <- billing_df[[category]]
-    num_levels <- length(levels(category_arr))
-    auxillaries <- cbind(
-      auxillaries,
-      to_categorical(
-        na_to_zero(as.numeric(category_arr) - 1),
-        num_levels
-      )
-    )
-}
+dummy_model <- dummyVars(" ~ .", data = categorical_vars, fullRank = T)
+auxillaries <- data.matrix(predict(dummy_model, newdata = categorical_vars))
 
 cat('Shape of auxillary tensor:', dim(auxillaries), "\n")
 ```
@@ -264,72 +252,63 @@ cat('Shape of auxillary tensor:', dim(auxillaries), "\n")
 
 We will tokenize each free form text: `Call Text` and `Billing Notes` separately.
 
-## 3.2.1 Call Text
+#### 3.2.1 Call Text
 
 We will start out by tokenizing `Call Text`:
 
+A `tokenizer` object will be created and configured to only take into account the top most common words, then builds the word index. We then turn the texts into lists of integer indices.
+
 ```{r}
 call_text_df <- billing_df %>% select(c("Call Text"))
-```
 
-A `tokenizer` object will be created and configured to only take into account the 20,000 most common words, then builds the word index.
-
-```{r}
-tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>%
+call_text_tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>%
   fit_text_tokenizer(call_text_df$`Call Text`)
-```
 
-We then turn the texts into lists of integer indices
-
-```{r}
-sequences <- texts_to_sequences(tokenizer, call_text_df$`Call Text`)
-```
-
-How you can recover the word index that was computed
-
-```{r}
-word_index <- tokenizer$word_index
-
-cat("Found", length(word_index), "unique tokens.\n")
+call_text_sequences <- texts_to_sequences(call_text_tokenizer, call_text_df$`Call Text`)
 ```
 
 ```{r}
-call_text_data <- pad_sequences(sequences, maxlen = CONSTANTS$MAX_LEN)
+call_text_word_index <- call_text_tokenizer$word_index
+
+cat("Found", length(call_text_word_index), "unique tokens.\n")
+```
+
+```{r}
+call_text_data <- pad_sequences(call_text_sequences, maxlen = CONSTANTS$MAX_LEN)
 
 cat("Shape of data tensor:", dim(call_text_data), "\n")
 ```
 
-## 3.2.2 Billing Notes
+#### 3.2.2 Billing Notes
 
 We then tokenize `Billing Notes`:
 
 ```{r}
 billing_notes_df <- billing_df %>% select("Billing Notes")
-```
 
-```{r}
-tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>%
+billing_notes_tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>%
   fit_text_tokenizer(billing_notes_df$`Billing Notes`)
+
+billing_notes_sequences <- texts_to_sequences(
+  billing_notes_tokenizer,
+  billing_notes_df$`Billing Notes`
+)
 ```
 
 ```{r}
-sequences <- texts_to_sequences(tokenizer, billing_notes_df$`Billing Notes`)
+billing_notes_word_index <- billing_notes_tokenizer$word_index
+
+cat("Found", length(billing_notes_word_index), "unique tokens.\n")
 ```
 
 ```{r}
-word_index <- tokenizer$word_index
-
-cat("Found", length(word_index), "unique tokens.\n")
-```
-
-```{r}
-billing_notes_data <- pad_sequences(sequences, maxlen = CONSTANTS$MAX_LEN)
+billing_notes_data <- pad_sequences(billing_notes_sequences, maxlen = CONSTANTS$MAX_LEN)
 
 cat("Shape of data tensor:", dim(billing_notes_data), "\n")
 ```
 
 ```{r}
-save.image(file = "data/data_prep_workspace.RData")
+#save.image(file = "data/data_prep_workspace.RData")
 save(
   CONSTANTS,
   billing_df,

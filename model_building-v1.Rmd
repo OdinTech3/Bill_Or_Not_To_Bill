@@ -1,13 +1,9 @@
 ---
-title: "Model Building"
-output: github_document
+title: "Model Building v1"
+output: html_notebook
 ---
 
 ```{r setup, include=F}
-knitr::opts_chunk$set(
-  fig.path = "markdown_figs/model_building-"
-)
-
 load("data/data_preparation.RData")
 ```
 
@@ -16,6 +12,7 @@ library(keras)
 library(dplyr)
 library(magrittr)
 library(caret)
+library(pROC)
 ```
 
 ## 1. Spliting Dataset into Training and Validation
@@ -24,14 +21,24 @@ library(caret)
 set.seed(2019)
 
 train_index <- createDataPartition(
-  invoiced,
+  factor(invoiced),
   p = 0.8,
   list = F,
   times = 1
 )
 ```
 
-### 1.1 Splitting `Call Text` into Training and Validation
+### 1.1 Splitting `Invoiced` into Training and Validation
+
+```{r}
+invoiced_train <- invoiced[train_index,] %>% as.array()
+invoiced_val <- invoiced[-train_index,] %>% as.array()
+
+cat(" Shape of Call Text Train:", dim(invoiced_train), "\n",
+    "Shape of Call Text Val:", dim(invoiced_val))
+```
+
+### 1.2 Splitting `Call Text` into Training and Validation
 
 ```{r}
 call_text_train <- call_text_data[train_index,]
@@ -59,16 +66,6 @@ auxillaries_val <- auxillaries[-train_index,]
 
 cat(" Shape of Call Text Train:", dim(auxillaries_train), "\n",
     "Shape of Call Text Val:", dim(auxillaries_val))
-```
-
-### 1.4 Splitting `Invoiced` into Training and Validation
-
-```{r}
-invoiced_train <- invoiced[train_index,]
-invoiced_val <- invoiced[-train_index,]
-
-cat(" Shape of Call Text Train:", dim(invoiced_train), "\n",
-    "Shape of Call Text Val:", dim(invoiced_val))
 ```
 
 ## 2. Merging Multiple Inputs
@@ -132,26 +129,82 @@ model <- keras_model(
 ```{r}
 model %>% compile(
   optimizer = 'rmsprop',
-  loss = 'binary_crossentropy'
+  loss = 'binary_crossentropy',
+  metric = c("accuracy")
 )
 
 summary(model)
 ```
 
-```{r}
+```{r eval = F}
 plot_model(model, show_shapes = T)
 ```
 
-```{r}
+### 2.5 Training The Model
+
+```{r echo = T, results = 'hide'}
 history <- model %>% fit(
   x = list(call_text_train, billing_notes_train, auxillaries_train),
   y = invoiced_train,
-  epochs = 10,
-  batch_size = 20,
+  epochs = 5,
+  batch_size = CONSTANTS$BATCH_SIZE_CPU,
   validation_data = list(list(call_text_val, billing_notes_val, auxillaries_val), invoiced_val)
 )
 ```
 
 ```{r}
-plot(history)
+plot(history,  method = c("ggplot2"))
 ```
+
+### 2.6 Evaluating The Model
+
+```{r echo = T, results = 'hide'}
+model_result <- model %>%
+  evaluate(
+    list(call_text_val, billing_notes_val, auxillaries_val),
+    invoiced_val
+  )
+```
+
+```{r}
+cat('Val loss:', model_result$loss, "\n")
+cat('Val accuracy:', model_result$acc, "\n")
+```
+
+
+#### 2.6.1 Model's ROC & AUC
+
+```{r}
+pred_probs <- predict(model,
+    list(call_text_val, billing_notes_val, auxillaries_val),
+    batch_size = CONSTANTS$BATCH_SIZE_CPU
+  )
+
+dim(pred_probs)
+```
+
+```{r}
+roc_result <- roc(invoiced_val, as.vector(pred_probs))
+
+roc_result
+```
+
+```{r}
+plot(roc_result, col='red', lwd=2)
+```
+
+#### 2.6.2 Model's Confusion Matrix
+
+```{r}
+pred_class <- as.numeric(pred_probs > .50) %>% as.factor()
+
+confusionMatrix(
+  pred_class,
+  as.factor(invoiced_val),
+  mode = "prec_recall",
+  dnn = c("Not Bill", "Bill")
+)
+```
+
+
+
