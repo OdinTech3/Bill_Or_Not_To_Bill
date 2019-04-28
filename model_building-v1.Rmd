@@ -4,6 +4,7 @@ output: html_notebook
 ---
 
 ```{r setup, include=F}
+rm(list = ls())
 load("data/data_preparation.RData")
 ```
 
