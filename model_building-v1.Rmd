@@ -16,7 +16,7 @@ library(caret)
 library(pROC)
 ```
 
-## 1. Spliting Dataset into Training and Validation
+## 1. Spliting Dataset into Training and Test
 
 ```{r echo = F}
 set.seed(2019)
@@ -29,44 +29,70 @@ train_index <- createDataPartition(
 )
 ```
 
-### 1.1 Splitting `Invoiced` into Training and Validation
+### 1.1 Splitting `Invoiced` into Training Validation and Test
 
 ```{r}
-invoiced_train <- invoiced[train_index,] %>% as.array()
-invoiced_val <- invoiced[-train_index,] %>% as.array()
+set.seed(2019)
 
-cat(" Shape of Call Text Train:", dim(invoiced_train), "\n",
-    "Shape of Call Text Val:", dim(invoiced_val))
+val_index <- createDataPartition(
+  factor(invoiced[train_index, ]),
+  p = 0.2,
+  list = F,
+  times = 1
+)
+
+invoiced_train <- invoiced[train_index, ][-val_index] %>% as.array()
+invoiced_val <- invoiced[train_index, ][val_index] %>% as.array()
+invoiced_test <- invoiced[-train_index,] %>% as.array()
+
+cat(" Shape of Invoiced Train:", dim(invoiced_train), "\n",
+    "Shape of Invoiced Val:", dim(invoiced_val), "\n",
+    "Shape of Invoiced Test:", dim(invoiced_test))
 ```
 
-### 1.2 Splitting `Call Text` into Training and Validation
+```{r}
+print("--Distribution of Classes in Train--")
+print(as.factor(invoiced_train) %>% summary())
+print("--Distribution of Classes in Validation--")
+print(as.factor(invoiced_val) %>% summary())
+print("--Distribution of Classes in Test--")
+print(as.factor(invoiced_test) %>% summary())
+```
+
+### 1.2 Splitting `Call Text` into Training and Test
 
 ```{r}
-call_text_train <- call_text_data[train_index,]
-call_text_val <- call_text_data[-train_index,]
+call_text_train <- call_text_data[train_index,][-val_index,] %>% as.array()
+call_text_val <- call_text_data[train_index,][val_index,] %>% as.array()
+call_text_test <- call_text_data[-train_index,]
 
 cat(" Shape of Call Text Train:", dim(call_text_train), "\n",
-    "Shape of Call Text Val:", dim(call_text_val))
+    "Shape of Call Text Val:", dim(call_text_val), "\n",
+    "Shape of Call Text Test:", dim(call_text_test))
 ```
 
-### 1.2 Splitting `Billing Notes` into Training and Validation
+### 1.2 Splitting `Billing Notes` into Training and Test
 
 ```{r}
-billing_notes_train <- billing_notes_data[train_index,]
-billing_notes_val <- billing_notes_data[-train_index,]
+billing_notes_train <- billing_notes_data[train_index,][-val_index,] %>% as.array()
+billing_notes_val <- billing_notes_data[train_index,][val_index,] %>% as.array()
+billing_notes_test <- billing_notes_data[-train_index,]
 
-cat(" Shape of Call Text Train:", dim(billing_notes_train), "\n",
-    "Shape of Call Text Val:", dim(billing_notes_val))
+cat(" Shape of Billing Notes Train:", dim(billing_notes_train), "\n",
+    "Shape of Billing Notes Val:", dim(billing_notes_val), "\n",
+    "Shape of Billing Notes Test:", dim(billing_notes_test))
 ```
 
-### 1.3 Splitting `Auxilary` Data into Training and Validation
+### 1.3 Splitting `Auxilary` Data into Training and Test
 
 ```{r}
-auxillaries_train <- auxillaries[train_index,]
-auxillaries_val <- auxillaries[-train_index,]
+auxillaries_train <- auxillaries[train_index,][-val_index,] %>% as.array()
+auxillaries_val <- auxillaries[train_index,][val_index,] %>% as.array()
+auxillaries_test <- auxillaries[-train_index,]
 
-cat(" Shape of Call Text Train:", dim(auxillaries_train), "\n",
-    "Shape of Call Text Val:", dim(auxillaries_val))
+cat(" Shape of Auxillaries Train:", dim(auxillaries_train), "\n",
+    "Shape of Auxillaries Val:", dim(auxillaries_val), "\n",
+    "Shape of Auxillaries Test:", dim(auxillaries_test))
 ```
 
 ## 2. Merging Multiple Inputs
@@ -137,7 +163,7 @@ model %>% compile(
 summary(model)
 ```
 
-```{r eval = F}
+```{r include = F, eval = F}
 plot_model(model, show_shapes = T)
 ```
 
@@ -151,6 +177,8 @@ history <- model %>% fit(
   batch_size = CONSTANTS$BATCH_SIZE_CPU,
   validation_data = list(list(call_text_val, billing_notes_val, auxillaries_val), invoiced_val)
 )
+
+save(model, history, file = "data/fitted_model_v1.RData")
 ```
 
 ```{r}
@@ -162,14 +190,14 @@ plot(history,  method = c("ggplot2"))
 ```{r echo = T, results = 'hide'}
 model_result <- model %>%
   evaluate(
-    list(call_text_val, billing_notes_val, auxillaries_val),
-    invoiced_val
+    list(call_text_test, billing_notes_test, auxillaries_test),
+    invoiced_test
   )
 ```
 
 ```{r}
-cat('Val loss:', model_result$loss, "\n")
-cat('Val accuracy:', model_result$acc, "\n")
+cat('Test loss:', model_result$loss, "\n")
+cat('Test accuracy:', model_result$acc, "\n")
 ```
 
 
@@ -177,7 +205,7 @@ cat('Val accuracy:', model_result$acc, "\n")
 
 ```{r}
 pred_probs <- predict(model,
-    list(call_text_val, billing_notes_val, auxillaries_val),
+    list(call_text_test, billing_notes_test, auxillaries_test),
     batch_size = CONSTANTS$BATCH_SIZE_CPU
   )
 
@@ -185,7 +213,7 @@ dim(pred_probs)
 ```
 
 ```{r}
-roc_result <- roc(invoiced_val, as.vector(pred_probs))
+roc_result <- roc(invoiced_test, as.vector(pred_probs))
 
 roc_result
 ```
@@ -201,11 +229,8 @@ pred_class <- as.numeric(pred_probs > .50) %>% as.factor()
 
 confusionMatrix(
   pred_class,
-  as.factor(invoiced_val),
+  as.factor(invoiced_test),
   mode = "prec_recall",
   dnn = c("Not Bill", "Bill")
 )
 ```
-
-
-
