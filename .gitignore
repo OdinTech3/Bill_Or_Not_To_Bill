@@ -4,6 +4,6 @@ billing_data/
 
 
 # Rstudio Files
-.RData
+*.RData
 .Rhistory
 *.nb.html
