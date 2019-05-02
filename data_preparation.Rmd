@@ -18,7 +18,7 @@ library(SnowballC)
 
 We will only load the first 100 observations
 
-```{r load-dataset, warning=F, message=F}
+```{r load-dataset, warning=F, message=F, echo = T, results = 'hide'}
 # Encode specific kinds of values as NA while reading excel
 # Treat all columns as character
 
@@ -39,7 +39,7 @@ Based on initial discussions and research into the meaning of some of the featur
 ```{r, echo=FALSE}
 features_to_rm <- c(
   "SR Number",
-  "SR Address Line 1", 
+  "SR Address Line 1",
   "SR State",
   "SR City",
   "SR Site",
@@ -135,14 +135,14 @@ call_text_corpus %>% extract(1:3) %>% inspect()
 call_text_corpus %>% head(3) %>% lapply(function (doc) doc$content)
 ```
 
-To clean our data set we will have to: 
+To clean our data set we will have to:
 
 * Convert the text to lower case, so that words like "write" and "Write" are considered the same word
 * Remove numbers
 * Remove English stopwords e.g "the", "is", "of", etc.
 * Remove punctuation e.g ",", "?", etc.
 * Eliminate extra white spaces
-* Stemming our text 
+* Stemming our text
 
 Using the `tm` package we will apply transformations to each text document in the `call_text_corpus` to clean the text document.
 
@@ -160,7 +160,7 @@ remove_single_chars <- function(document) {
 }
 
 clean_up <- function(corpus) {
-  corpus %>% 
+  corpus %>%
     # Convert the text to lower case
     tm_map(content_transformer(tolower)) %>%
     # Replace asterics "*" with an empty space
@@ -225,7 +225,7 @@ invoiced <- billing_df %>%
   use_series("Invoiced (Y/N)") %>%
   as.numeric() %>%
   subtract(1) %>%
-  as.matrix() 
+  as.matrix()
 
 cat('Shape of label tensor:', dim(invoiced))
 ```
@@ -233,7 +233,7 @@ cat('Shape of label tensor:', dim(invoiced))
 #### 3.1.1 One Hot Encoding The Categorical Variables
 
 ```{r}
-categorical_vars <- billing_df %>% 
+categorical_vars <- billing_df %>%
   select(char_to_factors[-1]) %>%
   # Treat NAs as a factor
   mutate_all(addNA)
@@ -250,7 +250,7 @@ cat('Shape of auxillary tensor:', dim(auxillaries), "\n")
 
 ### 3.2 Tokenizing Free Form Text
 
-We will tokenize each free form text: `Call Text` and `Billing Notes` separately. 
+We will tokenize each free form text: `Call Text` and `Billing Notes` separately.
 
 #### 3.2.1 Call Text
 
@@ -261,7 +261,7 @@ A `tokenizer` object will be created and configured to only take into account th
 ```{r}
 call_text_df <- billing_df %>% select(c("Call Text"))
 
-call_text_tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>% 
+call_text_tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>%
   fit_text_tokenizer(call_text_df$`Call Text`)
 
 call_text_sequences <- texts_to_sequences(call_text_tokenizer, call_text_df$`Call Text`)
@@ -286,7 +286,7 @@ We then tokenize `Billing Notes`:
 ```{r}
 billing_notes_df <- billing_df %>% select("Billing Notes")
 
-billing_notes_tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>% 
+billing_notes_tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>%
   fit_text_tokenizer(billing_notes_df$`Billing Notes`)
 
 billing_notes_sequences <- texts_to_sequences(
@@ -315,7 +315,7 @@ save(
   call_text_data,
   billing_notes_data,
   invoiced,
-  auxillaries, 
+  auxillaries,
   file="data/data_preparation.RData"
 )
 ```
