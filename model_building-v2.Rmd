@@ -180,7 +180,9 @@ history <- model %>% fit(
   validation_data = list(list(call_text_val, billing_notes_val, auxillaries_val), invoiced_val)
 )
 
-save(model, history, file = "data/fitted_model_v2.RData")
+# save(history, file = "data/history_model_v2.RData")
+# save_model_hdf5(model, filepath = "data/fitted_model_v2")
+# save_model_weights_hdf5(model, filepath = "data/fitted_model_v2_weights")
 ```
 
 ```{r}
@@ -227,7 +229,7 @@ plot(roc_result, col='red', lwd=2)
 #### 2.6.2 Model's Confusion Matrix
 
 ```{r}
-pred_class <- as.numeric(pred_probs > .50) %>% as.factor()
+pred_class <- as.numeric(pred_probs > .25) %>% as.factor()
 
 confusionMatrix(
   pred_class,
