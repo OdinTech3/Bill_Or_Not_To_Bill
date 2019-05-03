@@ -16,8 +16,6 @@ library(SnowballC)
 
 ## 1. Loading The Data
 
-We will only load the first 100 observations
-
 ```{r load-dataset, warning=F, message=F, echo = T, results = 'hide'}
 # Encode specific kinds of values as NA while reading excel
 # Treat all columns as character
