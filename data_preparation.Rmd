@@ -187,7 +187,6 @@ call_text_cleaned <- clean_up(call_text_corpus)
 bill_notes_cleaned <- clean_up(bill_notes_corpus)
 ```
 
-
 ```{r}
 call_text_cleaned  %>% lapply(function (doc) doc$content) %>% extract(1:5)
 ```
@@ -263,12 +262,8 @@ call_text_tokenizer <- text_tokenizer(num_words = CONSTANTS$MAX_WORDS) %>%
   fit_text_tokenizer(call_text_df$`Call Text`)
 
 call_text_sequences <- texts_to_sequences(call_text_tokenizer, call_text_df$`Call Text`)
-```
 
-```{r}
-call_text_word_index <- call_text_tokenizer$word_index
-
-cat("Found", length(call_text_word_index), "unique tokens.\n")
+cat("Found", length(call_text_tokenizer$word_index), "unique tokens.\n")
 ```
 
 ```{r}
@@ -291,12 +286,8 @@ billing_notes_sequences <- texts_to_sequences(
   billing_notes_tokenizer,
   billing_notes_df$`Billing Notes`
 )
-```
 
-```{r}
-billing_notes_word_index <- billing_notes_tokenizer$word_index
-
-cat("Found", length(billing_notes_word_index), "unique tokens.\n")
+cat("Found", length(billing_notes_tokenizer$word_index), "unique tokens.\n")
 ```
 
 ```{r}
@@ -306,7 +297,6 @@ cat("Shape of data tensor:", dim(billing_notes_data), "\n")
 ```
 
 ```{r}
-#save.image(file = "data/data_prep_workspace.RData")
 save(
   CONSTANTS,
   billing_df,
